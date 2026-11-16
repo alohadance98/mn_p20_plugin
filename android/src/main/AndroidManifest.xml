@@ -1,0 +1,26 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Camera preview of the P20 video inputs (MnCamera / MnCameraView). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <!-- Package visibility (Android 11+): the SDK resolves the MnSdk Service APK
+         by intent action before binding. The vendor AARs declare the first three;
+         FUEL_SERVICE is missing from the fuel AAR, so it is declared here. -->
+    <queries>
+        <intent>
+            <action android:name="com.amoymn.intent.action.P20_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="com.amoymn.intent.action.MDVR_HARDWARE_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="com.amoymn.intent.action.LED_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="com.amoymn.intent.action.FUEL_SERVICE" />
+        </intent>
+    </queries>
+</manifest>
