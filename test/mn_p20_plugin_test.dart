@@ -240,5 +240,39 @@ void main() {
       await tester.pumpAndSettle();
       expect(of('camera.close'), hasLength(2));
     });
+
+    testWidgets('MnCameraView reopens after the preview was lost', (
+      tester,
+    ) async {
+      int opens() => calls.where((c) => c.method == 'camera.open').length;
+
+      await tester.pumpWidget(
+        const Directionality(
+          textDirection: TextDirection.ltr,
+          child: MnCameraView(index: 0),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(Texture), findsOneWidget);
+
+      // Another preview being lost does not affect this one.
+      await emit({'event': 'camera.lost', 'textureId': 99});
+      await tester.pumpAndSettle();
+      expect(find.byType(Texture), findsOneWidget);
+
+      await emit({'event': 'camera.lost', 'textureId': 7});
+      await tester.pumpAndSettle();
+      expect(find.byType(Texture), findsNothing);
+      expect(find.textContaining('disconnected'), findsOneWidget);
+      expect(opens(), 1);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(opens(), 2);
+      expect(find.byType(Texture), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    });
   });
 }

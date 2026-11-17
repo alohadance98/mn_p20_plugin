@@ -2,6 +2,8 @@ package com.mn.plugin
 
 import android.Manifest
 import android.app.Activity
+import android.app.Application
+import android.os.Bundle
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Handler
@@ -67,7 +69,7 @@ class MnP20Plugin :
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
-        cameras = MnCameraPreviews(context, binding.textureRegistry)
+        cameras = MnCameraPreviews(context, binding.textureRegistry, ::emit)
         methodChannel = MethodChannel(binding.binaryMessenger, "$CHANNEL/methods")
         methodChannel.setMethodCallHandler(this)
         eventChannel = EventChannel(binding.binaryMessenger, "$CHANNEL/events")
@@ -83,9 +85,32 @@ class MnP20Plugin :
         subscriptions.clear()
     }
 
+    /**
+     * Cameras are released in onPause and reopened in onResume, so another app
+     * (e.g. the system camera) can use them while this one is in the background.
+     */
+    private val activityLifecycle = object : Application.ActivityLifecycleCallbacks {
+        private fun isHost(activity: Activity) = activity === activityBinding?.activity
+
+        override fun onActivityPaused(activity: Activity) {
+            if (isHost(activity)) cameras.onHostPaused()
+        }
+
+        override fun onActivityResumed(activity: Activity) {
+            if (isHost(activity)) cameras.onHostResumed()
+        }
+
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+        override fun onActivityStarted(activity: Activity) {}
+        override fun onActivityStopped(activity: Activity) {}
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+        override fun onActivityDestroyed(activity: Activity) {}
+    }
+
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activityBinding = binding
         binding.addRequestPermissionsResultListener(this)
+        binding.activity.application.registerActivityLifecycleCallbacks(activityLifecycle)
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) =
@@ -94,7 +119,10 @@ class MnP20Plugin :
     override fun onDetachedFromActivityForConfigChanges() = onDetachedFromActivity()
 
     override fun onDetachedFromActivity() {
-        activityBinding?.removeRequestPermissionsResultListener(this)
+        activityBinding?.let { binding ->
+            binding.removeRequestPermissionsResultListener(this)
+            binding.activity.application.unregisterActivityLifecycleCallbacks(activityLifecycle)
+        }
         activityBinding = null
         pendingCameraPermission?.success(false)
         pendingCameraPermission = null

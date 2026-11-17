@@ -93,6 +93,12 @@ giải phóng khi bị gỡ khỏi cây widget:
 SizedBox(height: 360, child: MnCameraView(index: 0))
 ```
 
+Camera được nhả khi app bị đưa xuống nền và tự mở lại khi app quay lại, nên
+ứng dụng khác (ví dụ app camera của thiết bị) vẫn dùng được camera trong lúc đó.
+Nếu camera bị chiếm khi app đang hiển thị, plugin thử mở lại 5 lần, mỗi lần cách
+nhau 1 giây; hết số lần thì `MnCameraView` hiện lỗi và thử lại mỗi khi app quay
+lại màn hình.
+
 Muốn đổi kênh mà đầu ghi MDVR xuất ra thì dùng
 `MnMdvrSdk.instance.switchAnalogChannels([1, 2, 3, 4])`,
 `switchIpcChannel(1)` hoặc `resetToDefaultChannel()`.

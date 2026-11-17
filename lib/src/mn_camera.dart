@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import 'mn_channel.dart';
@@ -50,6 +52,15 @@ abstract final class MnCamera {
     );
   }
 
+  /// Texture ids of previews the native side gave up on: the camera was taken
+  /// away (by another app, or a lost signal) and could not be reopened. Such a
+  /// preview is already closed; call [open] again to get a new one.
+  ///
+  /// Short interruptions never show up here. The camera is released while the
+  /// app is in the background and reopened into the same texture on return.
+  static final Stream<int> lostPreviews = mnRawEvents('camera.lost')
+      .map((event) => event['textureId'] as int);
+
   /// Stops the preview and releases the camera.
   static Future<void> close(MnCameraPreview preview) =>
       mnInvoke<void>('camera.close', {'textureId': preview.textureId});
@@ -81,7 +92,8 @@ class MnCameraView extends StatefulWidget {
   State<MnCameraView> createState() => _MnCameraViewState();
 }
 
-class _MnCameraViewState extends State<MnCameraView> {
+class _MnCameraViewState extends State<MnCameraView>
+    with WidgetsBindingObserver {
   MnCameraPreview? _preview;
   Object? _error;
 
@@ -91,10 +103,32 @@ class _MnCameraViewState extends State<MnCameraView> {
   /// Bumped on every switch; an open that finishes late is discarded.
   int _generation = 0;
 
+  StreamSubscription<int>? _lostSubscription;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _lostSubscription = MnCamera.lostPreviews.listen(_onPreviewLost);
     _switchTo(widget.index);
+  }
+
+  /// The native side could not get the camera back; its texture is gone.
+  void _onPreviewLost(int textureId) {
+    if (!mounted || _preview?.textureId != textureId) return;
+    setState(() {
+      _preview = null;
+      _error = StateError('Camera ${widget.index} disconnected');
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // A preview that failed (e.g. the camera was busy in another app) gets
+    // another chance every time the app comes back to the foreground.
+    if (state == AppLifecycleState.resumed && _error != null) {
+      _switchTo(widget.index);
+    }
   }
 
   @override
@@ -105,6 +139,8 @@ class _MnCameraViewState extends State<MnCameraView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _lostSubscription?.cancel();
     _generation++;
     final preview = _preview;
     _preview = null;
